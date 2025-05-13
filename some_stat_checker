@@ -1,0 +1,56 @@
+import yfinance as yf
+import pandas_ta as ta
+
+def get_stock_data(tickers, dates=None):
+    stock_data = {}
+    for ticker in tickers:
+        try:
+            stock = yf.Ticker(ticker)
+
+            if dates:
+                if isinstance(dates, list):
+                    historical_data = {}
+                    for date in dates:
+                        hist = stock.history(start=date, end=date)
+                        historical_data[date] = hist
+                    stock_data[ticker] = {
+                        'historical_data': historical_data,
+                    }
+                else:
+                    raise ValueError("Dates should be provided as a list of strings (e.g., ['2024-10-18']).")
+            else:
+                hist = stock.history(period='1y')
+                stock_data[ticker] = {
+                    'historical_data': hist,
+                }
+
+            # Calculate additional technical indicators
+            hist['Bollinger_High'] = ta.bbands(hist['Close'], length=20)['BBU_20_2.0']
+            hist['Bollinger_Low'] = ta.bbands(hist['Close'], length=20)['BBL_20_2.0']
+            macd = ta.macd(hist['Close'])
+            hist['MACD'] = macd['MACD_12_26_9']
+            hist['MACD_Signal'] = macd['MACDs_12_26_9']
+            hist['RSI'] = ta.rsi(hist['Close'], length=14)
+            hist['ATR'] = ta.atr(hist['High'], hist['Low'], hist['Close'], length=14)
+
+            stock_data[ticker]['historical_data'] = hist
+
+            info = stock.info
+            stock_data[ticker]['info'] = {
+                'market_cap': info.get('marketCap', 'N/A'),
+                'pe_ratio': info.get('trailingPE', 'N/A'),
+                'eps': info.get('trailingEps', 'N/A'),
+                'dividend_yield': info.get('dividendYield', 'N/A'),
+                'revenue': info.get('revenue', 'N/A'),
+            }
+            stock_data[ticker]['dividends'] = stock.dividends
+            stock_data[ticker]['splits'] = stock.splits
+
+            print(f"Fetched data for {ticker}")
+        except Exception as e:
+            print(f"Error fetching data for {ticker}: {e}")
+    return stock_data
+
+# Example usage
+stock_list_example = ['KSCP', 'WOLF', 'MPLN', 'VERB', 'XPON']
+get_stock_data(stock_list_example, dates=['2024-10-10'])
