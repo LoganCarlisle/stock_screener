@@ -1,0 +1,70 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import calendar
+from datetime import datetime
+import matplotlib.colors as mcolors
+
+df = pd.read_csv(r"C:\Users\logan\Downloads\paper-trading-account-history-2024-10-15T16_04_05.463Z.csv")
+
+df['Time'] = pd.to_datetime(df['Time'])
+df.set_index('Time', inplace=True)
+
+df['Trade Type'] = df['Action'].apply(lambda x: 'Short' if 'short position' in x.lower() else 'Long')
+
+df['Win'] = df['Realized P&L (value)'] > 0
+
+short_trades = df[df['Trade Type'] == 'Short']
+long_trades = df[df['Trade Type'] == 'Long']
+
+short_win_percentage = short_trades['Win'].mean() * 100
+long_win_percentage = long_trades['Win'].mean() * 100
+
+daily_pnl = df['Realized P&L (value)'].resample('D').sum()
+
+daily_balance_change = (df['Balance After'].resample('D').last() - df['Balance Before'].resample('D').first()) / df[
+    'Balance Before'].resample('D').first() * 100
+
+
+year = 2024
+month = 10
+
+cal = calendar.monthcalendar(year, month)
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_title(f'Profit and Loss Calendar for {calendar.month_name[month]} {year}\n'
+             f'Short Win %: {short_win_percentage:.2f}%, Long Win %: {long_win_percentage:.2f}%')
+
+ax.axis('off')
+
+cmap = plt.get_cmap('RdYlGn')
+norm = mcolors.TwoSlopeNorm(vmin=-daily_pnl.abs().max(), vcenter=0, vmax=daily_pnl.abs().max())
+
+for week_idx, week in enumerate(cal):
+    for day_idx, day in enumerate(week):
+        if day != 0:  
+            x = day_idx
+            y = -week_idx
+
+            date_str = f"{year}-{month:02d}-{day:02d}"
+            date = datetime.strptime(date_str, '%Y-%m-%d')
+            pnl_value = daily_pnl.get(date, None)
+            pct_change = daily_balance_change.get(date, None)
+
+            # Determine the background color based on the P&L value
+            if pnl_value is not None:
+                color = cmap(norm(pnl_value))
+                ax.add_patch(plt.Rectangle((x - 0.5, y - 0.5), 1, 1, facecolor=color, edgecolor='gray', linewidth=0.5))
+                ax.text(x, y, f"{day}\n${pnl_value:.2f}\n{pct_change:.2f}%", ha='center', va='center',
+                        fontsize=8, color='black',
+                        bbox=dict(facecolor='none', edgecolor='none', boxstyle='round,pad=0.3'))
+            else:
+                ax.text(x, y, f"{day}", ha='center', va='center', fontsize=10)
+
+# Set up the grid to represent the calendar layout
+ax.set_xlim(-0.5, 6.5)
+ax.set_ylim(-len(cal) + 0.5, 0.5)
+
+plt.show()
+
+total_short_trades = len(short_trades)
+print(f"Total number of short trades: {total_short_trades}")
